@@ -1,0 +1,400 @@
+import React, { useState, useEffect } from 'react';
+import {Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, Cpu, Hash, Settings, FileText, Copy, Check, RotateCcw, Save, FolderOpen, Maximize2, Minimize2, X } from 'lucide-react';
+import { PlayfairCipher } from '../lib/playfair';
+import { RSACipher } from '../lib/rsa';
+
+const EncryptionApp = () => {
+    const [method, setMethod] = useState('playfair');
+    const [inputText, setInputText] = useState('');
+    const [outputText, setOutputText] = useState('');
+    const [playfairKey, setPlayfairKey] = useState('');
+    const [rsaP, setRsaP] = useState('17');
+    const [rsaQ, setRsaQ] = useState('11');
+    const [mode, setMode] = useState('encrypt');
+    const [playfairMatrix, setPlayfairMatrix] = useState([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [showKey, setShowKey] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const [isMaximized, setIsMaximized] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyboard = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case 'Enter':
+                        e.preventDefault();
+                        handleEncryptDecrypt();
+                        break;
+                    case 'c':
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            copyToClipboard();
+                        }
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        clearAll();
+                        break;
+                    case '1':
+                        e.preventDefault();
+                        setMethod('playfair');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        setMethod('rsa');
+                        break;
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyboard);
+        return () => document.removeEventListener('keydown', handleKeyboard);
+    }, [inputText, outputText]);
+
+    const handleEncryptDecrypt = async () => {
+        setIsProcessing(true);
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (method === 'playfair') {
+            const cipher = new PlayfairCipher(playfairKey);
+            setPlayfairMatrix(cipher.getMatrix());
+
+            if (mode === 'encrypt') {
+                setOutputText(cipher.encrypt(inputText));
+            } else {
+                setOutputText(cipher.decrypt(inputText));
+            }
+        } else {
+            try {
+                const p = parseInt(rsaP);
+                const q = parseInt(rsaQ);
+                const cipher = new RSACipher(p, q);
+
+                if (mode === 'encrypt') {
+                    const encrypted = cipher.encrypt(inputText);
+                    setOutputText(JSON.stringify(encrypted));
+                } else {
+                    try {
+                        const decrypted = cipher.decrypt(JSON.parse(inputText));
+                        setOutputText(decrypted);
+                    } catch (error) {
+                        alert('Invalid encrypted text format. Please provide a valid array of numbers.');
+                    }
+                }
+            } catch (error) {
+                alert('Please provide valid prime numbers for P and Q');
+            }
+        }
+
+        setIsProcessing(false);
+    };
+
+    const copyToClipboard = () => {
+        if (outputText) {
+            navigator.clipboard.writeText(outputText);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const clearAll = () => {
+        setInputText('');
+        setOutputText('');
+        setPlayfairMatrix([]);
+    };
+
+    const swapInputOutput = () => {
+        const temp = inputText;
+        setInputText(outputText);
+        setOutputText(temp);
+        setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
+    };
+
+    return (
+        <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
+            {/* Title Bar
+            <div className="h-8 bg-gray-800 flex items-center justify-between px-4 border-b border-gray-700 select-none">
+                <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm font-medium">Cryptify Desktop</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button className="w-6 h-6 rounded hover:bg-gray-700 flex items-center justify-center">
+                        <Minimize2 className="w-3 h-3" />
+                    </button>
+                    <button
+                        onClick={() => setIsMaximized(!isMaximized)}
+                        className="w-6 h-6 rounded hover:bg-gray-700 flex items-center justify-center"
+                    >
+                        <Maximize2 className="w-3 h-3" />
+                    </button>
+                    <button className="w-6 h-6 rounded hover:bg-red-600 flex items-center justify-center">
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            </div> */}
+
+            {/* Menu Bar */}
+            <div className="h-10 bg-gray-800 flex items-center px-4 border-b border-gray-700 text-sm">
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4">
+                      <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="p-2 rounded hover:bg-gray-700"
+                        >
+                            <Menu className="w-4 h-4" />
+                        </button>
+                        <button className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2">
+                            <FolderOpen className="w-4 h-4" />
+                            File
+                        </button>
+                        <button className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2">
+                            <Settings className="w-4 h-4" />
+                            Settings
+                        </button>
+                    </div>
+                    <div className="text-gray-500 text-xs">
+                        Ctrl+Enter: Process | Ctrl+Shift+C: Copy | Ctrl+R: Clear
+                    </div>
+
+                </div>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+                {/* Sidebar */}
+                <div className={`${sidebarOpen ? 'w-80' : 'w-0'} bg-gray-800 border-r border-gray-700 transition-all duration-300 overflow-hidden flex flex-col`}>
+                    <div className="p-4 border-b border-gray-700">
+                        <h3 className="font-semibold mb-4 flex items-center gap-2">
+                            <Key className="w-4 h-4" />
+                            Configuration
+                        </h3>
+
+                        {/* Method Selection */}
+                        <div className="space-y-3 mb-6">
+                            <label className="text-sm text-gray-300">Encryption Method</label>
+                            <div className="grid grid-cols-1 gap-2">
+                                <button
+                                    onClick={() => setMethod('playfair')}
+                                    className={`p-3 rounded-lg text-left transition-all duration-200 border ${method === 'playfair'
+                                            ? 'bg-blue-600 border-blue-500 text-white'
+                                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                                        }`}
+                                >
+                                    <div className="font-medium">Playfair Cipher</div>
+                                    <div className="text-xs opacity-75">Classical polyalphabetic</div>
+                                </button>
+                                <button
+                                    onClick={() => setMethod('rsa')}
+                                    className={`p-3 rounded-lg text-left transition-all duration-200 border ${method === 'rsa'
+                                            ? 'bg-blue-600 border-blue-500 text-white'
+                                            : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                                        }`}
+                                >
+                                    <div className="font-medium">RSA Encryption</div>
+                                    <div className="text-xs opacity-75">Public-key cryptography</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Operation Mode */}
+                        <div className="space-y-3 mb-6">
+                            <label className="text-sm text-gray-300">Operation Mode</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setMode('encrypt')}
+                                    className={`p-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'encrypt'
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        }`}
+                                >
+                                    <Lock className="w-4 h-4" />
+                                    Encrypt
+                                </button>
+                                <button
+                                    onClick={() => setMode('decrypt')}
+                                    className={`p-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'decrypt'
+                                            ? 'bg-orange-600 text-white'
+                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        }`}
+                                >
+                                    <Unlock className="w-4 h-4" />
+                                    Decrypt
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Key Configuration */}
+                        {method === 'playfair' ? (
+                            <div className="space-y-3">
+                                <label className="text-sm text-gray-300">Playfair Key</label>
+                                <div className="relative">
+                                    <input
+                                        type={showKey ? "text" : "password"}
+                                        value={playfairKey}
+                                        onChange={(e) => setPlayfairKey(e.target.value)}
+                                        placeholder="Enter secret key..."
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                                    />
+                                    <button
+                                        onClick={() => setShowKey(!showKey)}
+                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                                    >
+                                        {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm text-gray-300">RSA Prime P</label>
+                                    <input
+                                        type="number"
+                                        value={rsaP}
+                                        onChange={(e) => setRsaP(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm text-gray-300">RSA Prime Q</label>
+                                    <input
+                                        type="number"
+                                        value={rsaQ}
+                                        onChange={(e) => setRsaQ(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Playfair Matrix */}
+                    {method === "playfair" && playfairMatrix.length > 0 && (
+                        <div className="p-4 flex-1 overflow-auto">
+                            <h4 className="text-sm font-medium text-gray-300 mb-3">Playfair Matrix</h4>
+                            <div className="grid grid-cols-5 gap-1">
+                                {playfairMatrix.map((row, i) =>
+                                    row.map((cell, j) => (
+                                        <div
+                                            key={`${i}-${j}`}
+                                            className="w-10 h-10 bg-gray-700 border border-gray-600 rounded flex items-center justify-center text-sm font-mono text-blue-300"
+                                        >
+                                            {cell}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col">
+                    {/* Toolbar */}
+                    <div className="h-12 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4">
+                        <div className="flex items-center gap-2">
+                            {/* <div className="w-px h-6 bg-gray-600 mx-2" /> */}
+                            {/* <button className="p-2 rounded hover:bg-gray-700" title="Open File">
+                                <FolderOpen className="w-4 h-4" />
+                            </button>
+                            <button className="p-2 rounded hover:bg-gray-700" title="Save File">
+                                <Save className="w-4 h-4" />
+                            </button> */}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={swapInputOutput}
+                                className="p-2 rounded hover:bg-gray-700 flex items-center gap-1 text-sm"
+                                title="Swap Input/Output"
+                            >
+                                <RotateCcw className="w-4 h-4" />
+                                Swap
+                            </button>
+                            <button
+                                onClick={clearAll}
+                                className="p-2 rounded hover:bg-gray-700 text-sm"
+                                title="Clear All (Ctrl+R)"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content Areas */}
+                    <div className="flex-1 grid grid-cols-2 gap-4 p-4">
+                        {/* Input Panel */}
+                        <div className="flex flex-col bg-gray-800 rounded-lg border border-gray-700">
+                            <div className="p-3 border-b border-gray-700 flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-blue-400" />
+                                <span className="font-medium">Input Text</span>
+                                <div className="ml-auto text-xs text-gray-400">
+                                    {inputText.length} characters
+                                </div>
+                            </div>
+                            <textarea
+                                value={inputText}
+                                onChange={(e) => setInputText(e.target.value)}
+                                placeholder={mode === "encrypt" ? "Enter text to encrypt..." : "Enter text to decrypt..."}
+                                className="flex-1 p-4 bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none font-mono"
+                                style={{ minHeight: '300px' }}
+                            />
+                        </div>
+
+                        {/* Output Panel */}
+                        <div className="flex flex-col bg-gray-800 rounded-lg border border-gray-700">
+                            <div className="p-3 border-b border-gray-700 flex items-center gap-2">
+                                <Lock className="w-4 h-4 text-green-400" />
+                                <span className="font-medium">Output Result</span>
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className="text-xs text-gray-400">
+                                        {outputText.length} characters
+                                    </span>
+                                    <button
+                                        onClick={copyToClipboard}
+                                        className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white"
+                                        title="Copy to Clipboard (Ctrl+Shift+C)"
+                                    >
+                                        {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <textarea
+                                value={outputText}
+                                readOnly
+                                className="flex-1 p-4 bg-transparent text-green-400 resize-none focus:outline-none font-mono"
+                                style={{ minHeight: '300px' }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="h-16 bg-gray-800 border-t border-gray-700 flex items-center justify-center px-4">
+                        <button
+                            onClick={handleEncryptDecrypt}
+                            disabled={isProcessing || !inputText.trim() || (method === 'playfair' && !playfairKey.trim())}
+                            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-medium rounded-lg transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed min-w-48"
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    {mode === 'encrypt' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                                    {mode === 'encrypt' ? 'Encrypt Text' : 'Decrypt Text'}
+                                    <span className="text-xs opacity-75">(Ctrl+Enter)</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default EncryptionApp;
