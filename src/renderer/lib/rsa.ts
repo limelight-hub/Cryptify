@@ -1,4 +1,4 @@
-export class RSACipher {
+export default class RSACipher {
   private p: number;
   private q: number;
   private n: number;

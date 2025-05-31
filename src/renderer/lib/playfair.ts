@@ -1,4 +1,4 @@
-export class PlayfairCipher {
+export default class PlayfairCipher {
   private matrix: string[][] = [];
   private key: string = '';
 

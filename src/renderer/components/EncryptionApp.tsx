@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import {Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, Cpu, Hash, Settings, FileText, Copy, Check, RotateCcw, Save, FolderOpen, Maximize2, Minimize2, X } from 'lucide-react';
-import { PlayfairCipher } from '../lib/playfair';
-import { RSACipher } from '../lib/rsa';
+import React, { useState, useEffect, useCallback } from 'react';
+import {Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, Cpu, Hash, Settings, FileText, Copy, Check, RotateCcw, Save, FolderOpen, Maximize2, Minimize2, X, Info } from 'lucide-react';
+import PlayfairCipher from '../lib/playfair';
+import RSACipher from '../lib/rsa';
 
 const EncryptionApp = () => {
     const [method, setMethod] = useState('playfair');
@@ -17,6 +17,7 @@ const EncryptionApp = () => {
     const [copied, setCopied] = useState(false);
     const [isMaximized, setIsMaximized] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [aboutOpen, setAboutOpen] = useState(false);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -113,9 +114,43 @@ const EncryptionApp = () => {
         setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
     };
 
+    const loadFromFile = useCallback(() => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.txt';
+      input.onchange = (e: Event) => {
+        // Type assertion for input element
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e: ProgressEvent<FileReader>) => {
+            try {
+              // Use the properly typed FileReader result
+              const result = e.target?.result as string;
+              const data = JSON.parse(result);
+              if (data.method) setMethod(data.method);
+              if (data.mode) setMode(data.mode);
+              if (data.input) setInputText(data.input);
+              if (data.output) setOutputText(data.output);
+              if (data.key) setPlayfairKey(data.key);
+              if (data.p) setRsaP(data.p.toString());
+              if (data.q) setRsaQ(data.q.toString());
+            } catch (error) {
+              // If JSON parsing fails, treat as plain text
+              setInputText(e.target?.result as string);
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    }, []);
+
     return (
         <div className="h-screen bg-gray-900 text-white flex flex-col overflow-hidden">
-            {/* Title Bar
+            {/* Title Bar */}
             <div className="h-8 bg-gray-800 flex items-center justify-between px-4 border-b border-gray-700 select-none">
                 <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-blue-400" />
@@ -135,32 +170,38 @@ const EncryptionApp = () => {
                         <X className="w-3 h-3" />
                     </button>
                 </div>
-            </div> */}
+            </div>
 
             {/* Menu Bar */}
             <div className="h-10 bg-gray-800 flex items-center px-4 border-b border-gray-700 text-sm">
-                <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-4">
-                      <button
-                            onClick={() => setSidebarOpen(!sidebarOpen)}
-                            className="p-2 rounded hover:bg-gray-700"
-                        >
-                            <Menu className="w-4 h-4" />
-                        </button>
-                        <button className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2">
-                            <FolderOpen className="w-4 h-4" />
-                            File
-                        </button>
-                        <button className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2">
-                            <Settings className="w-4 h-4" />
-                            Settings
-                        </button>
-                    </div>
-                    <div className="text-gray-500 text-xs">
-                        Ctrl+Enter: Process | Ctrl+Shift+C: Copy | Ctrl+R: Clear
-                    </div>
-
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="p-2 rounded hover:bg-gray-700"
+                    title="Toggle Sidebar"
+                  >
+                 <Menu className="w-4 h-4" />
+                  </button>
+                <button
+                  onClick={() => loadFromFile()}
+                  className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                    File
+                </button>
+                <button
+                  className="px-3 py-1 rounded hover:bg-gray-700 flex items-center gap-2"
+                  onClick={() => setAboutOpen(true)}
+                >
+                  <Info className="w-4 h-4" />
+                    About
+                </button>
                 </div>
+                <div className="text-gray-500 text-xs">
+                  Ctrl+Enter: Process | Ctrl+Shift+C: Copy | Ctrl+R: Clear
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-1 overflow-hidden">
@@ -294,15 +335,7 @@ const EncryptionApp = () => {
                 <div className="flex-1 flex flex-col">
                     {/* Toolbar */}
                     <div className="h-12 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4">
-                        <div className="flex items-center gap-2">
-                            {/* <div className="w-px h-6 bg-gray-600 mx-2" /> */}
-                            {/* <button className="p-2 rounded hover:bg-gray-700" title="Open File">
-                                <FolderOpen className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 rounded hover:bg-gray-700" title="Save File">
-                                <Save className="w-4 h-4" />
-                            </button> */}
-                        </div>
+                        <div></div>
 
                         <div className="flex items-center gap-2">
                             <button
@@ -343,7 +376,7 @@ const EncryptionApp = () => {
                             />
                         </div>
 
-                        {/* Output Panel */}
+                        {/* Text Panel */}
                         <div className="flex flex-col bg-gray-800 rounded-lg border border-gray-700">
                             <div className="p-3 border-b border-gray-700 flex items-center gap-2">
                                 <Lock className="w-4 h-4 text-green-400" />
@@ -392,6 +425,67 @@ const EncryptionApp = () => {
                         </button>
                     </div>
                 </div>
+
+                {aboutOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-gray-800 rounded-lg shadow-lg w-full max-w-md mx-4">
+                        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <Shield className="w-5 h-5 text-blue-400" />
+                                About Cryptify
+                            </h3>
+                            <button
+                                onClick={() => setAboutOpen(false)}
+                                className="p-1 rounded-md hover:bg-gray-700"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <div className="flex justify-center mb-4">
+                                <div className="h-20 w-20 bg-gray-700 rounded-full flex items-center justify-center">
+                                    <Shield className="w-12 h-12 text-blue-400" />
+                                    </div>
+                            </div>
+
+                            <h4 className="text-center text-xl font-bold mb-2">Cryptify</h4>
+                            <p className="text-center text-gray-400 mb-4">v1.0.0</p>
+
+                            <div className="bg-gray-700 rounded-md p-4 mb-4">
+                                <p className="text-sm text-gray-300 leading-relaxed">
+                                    Cryptify is a desktop application that allows you to encrypt and decrypt
+                                    messages using various cryptographic algorithms including Playfair cipher
+                                    and RSA encryption.
+                                </p>
+                            </div>
+
+                            <div className="space-y-3 text-sm text-gray-400">
+                                <div className="flex justify-between">
+                                    <span>Developer</span>
+                                    <span className="text-gray-300">Truc Lam, Vu Binh, Chanh Phuc @ UIT</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Framework</span>
+                                    <span className="text-gray-300">Electron + React</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>License</span>
+                                    <span className="text-gray-300">MIT</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-700 flex justify-end">
+                            <button
+                                onClick={() => setAboutOpen(false)}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                )}
             </div>
         </div>
     );

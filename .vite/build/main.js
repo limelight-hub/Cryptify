@@ -655,7 +655,7 @@ registerIpcHandlers();
 const createWindow = () => {
   const mainWindow = new require$$3.BrowserWindow({
     width: 1200,
-    height: 1200,
+    height: 1e3,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
