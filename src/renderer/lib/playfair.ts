@@ -3,120 +3,78 @@ export default class PlayfairCipher {
   private key: string = '';
 
   constructor(key: string) {
-    this.key = this.preprocessKey(key);
-    this.generateMatrix();
+    this.key = this.prepareKey(key);
+    this.matrix = this.generateMatrix();
   }
 
-  private preprocessKey(key: string): string {
-    // Remove non-alphabetic characters and convert to uppercase
-    key = key.toUpperCase().replace(/[^A-Z]/g, '');
-    // Replace J with I
-    key = key.replace(/J/g, 'I');
-    // Remove duplicates while preserving order
-    return [...new Set(key)].join('');
+  private prepareKey(key: string): string {
+    return key.toUpperCase().replace(/[^A-Z]/g, '').replace(/J/g, 'I');
   }
 
-  private generateMatrix(): void {
-    const alphabet = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'; // Note: I and J are combined
-    const matrixChars = this.key + alphabet;
-    const uniqueChars = [...new Set(matrixChars)];
-
-    this.matrix = Array(5).fill(null).map(() => Array(5).fill(''));
-    let charIndex = 0;
-
+  private generateMatrix(): string[][] {
+    const alphabet = 'ABCDEFGHIKLMNOPQRSTUVWXYZ';
+    const keyUnique = Array.from(new Set(this.key + alphabet)).filter(c => c !== 'J');
+    const matrix: string[][] = [];
     for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 5; j++) {
-        this.matrix[i][j] = uniqueChars[charIndex++];
+      matrix.push(keyUnique.slice(i * 5, i * 5 + 5));
+    }
+    return matrix;
+  }
+
+  private findPosition(char: string): { row: number; col: number } {
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 5; col++) {
+        if (this.matrix[row][col] === char) return { row, col };
       }
+    }
+    return { row: -1, col: -1 };
+  }
+
+  private processText(text: string): string[][] {
+    const clean = this.prepareKey(text);
+    const pairs: string[][] = [];
+    for (let i = 0; i < clean.length; i += 2) {
+      let a = clean[i];
+      let b = clean[i + 1] || 'X';
+      if (a === b) b = 'X';
+      pairs.push([a, b]);
+    }
+    return pairs;
+  }
+
+  private shiftChar(pos: { row: number; col: number }, dir: number, isRow: boolean): string {
+    if (isRow) {
+      return this.matrix[pos.row][(pos.col + dir + 5) % 5];
+    } else {
+      return this.matrix[(pos.row + dir + 5) % 5][pos.col];
     }
   }
 
-  private findPosition(char: string): [number, number] {
-    for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 5; j++) {
-        if (this.matrix[i][j] === char) {
-          return [i, j];
-        }
-      }
-    }
-    return [-1, -1];
-  }
-
-  private preprocessText(text: string): string {
-    // Remove non-alphabetic characters and convert to uppercase
-    text = text.toUpperCase().replace(/[^A-Z]/g, '');
-    // Replace J with I
-    text = text.replace(/J/g, 'I');
-
-    // Split text into pairs and add 'X' between same letters in a pair
+  private transform(pairs: string[][], dir: number): string {
     let result = '';
-    for (let i = 0; i < text.length; i++) {
-      result += text[i];
-      if (i < text.length - 1) {
-        if (text[i] === text[i + 1]) {
-          result += 'X';
-        }
-      }
-    }
-
-    // Add 'X' if the length is odd
-    if (result.length % 2 !== 0) {
-      result += 'X';
-    }
-
-    return result;
-  }
-
-  public encrypt(plaintext: string): string {
-    const text = this.preprocessText(plaintext);
-    let result = '';
-
-    for (let i = 0; i < text.length; i += 2) {
-      const [row1, col1] = this.findPosition(text[i]);
-      const [row2, col2] = this.findPosition(text[i + 1]);
-
-      if (row1 === row2) {
-        // Same row
-        result += this.matrix[row1][(col1 + 1) % 5];
-        result += this.matrix[row2][(col2 + 1) % 5];
-      } else if (col1 === col2) {
-        // Same column
-        result += this.matrix[(row1 + 1) % 5][col1];
-        result += this.matrix[(row2 + 1) % 5][col2];
+    for (const [a, b] of pairs) {
+      const posA = this.findPosition(a);
+      const posB = this.findPosition(b);
+      if (posA.row === posB.row) {
+        result += this.shiftChar(posA, dir, true);
+        result += this.shiftChar(posB, dir, true);
+      } else if (posA.col === posB.col) {
+        result += this.shiftChar(posA, dir, false);
+        result += this.shiftChar(posB, dir, false);
       } else {
-        // Rectangle case
-        result += this.matrix[row1][col2];
-        result += this.matrix[row2][col1];
+        result += this.matrix[posA.row][posB.col];
+        result += this.matrix[posB.row][posA.col];
       }
     }
-
     return result;
   }
 
-  public decrypt(ciphertext: string): string {
-    const text = this.preprocessText(ciphertext);
-    let result = '';
+  public encrypt(text: string): string {
+    return this.transform(this.processText(text), 1);
+  }
 
-    for (let i = 0; i < text.length; i += 2) {
-      const [row1, col1] = this.findPosition(text[i]);
-      const [row2, col2] = this.findPosition(text[i + 1]);
-
-      if (row1 === row2) {
-        // Same row
-        result += this.matrix[row1][(col1 + 4) % 5];
-        result += this.matrix[row2][(col2 + 4) % 5];
-      } else if (col1 === col2) {
-        // Same column
-        result += this.matrix[(row1 + 4) % 5][col1];
-        result += this.matrix[(row2 + 4) % 5][col2];
-      } else {
-        // Rectangle case
-        result += this.matrix[row1][col2];
-        result += this.matrix[row2][col1];
-      }
-    }
-
-    return result;
+  public decrypt(text: string): string {
+    return this.transform(this.processText(text), -1);
   }
 
   public getMatrix(): string[][] {

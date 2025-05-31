@@ -1,158 +1,154 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, Cpu, Hash, Settings, FileText, Copy, Check, RotateCcw, Save, FolderOpen, Maximize2, Minimize2, X, Info, Sun, Moon} from 'lucide-react';
+import {
+  Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, FileText, Copy, Check,
+  RotateCcw, FolderOpen, Maximize2, Minimize2, X, Info, Sun, Moon
+} from 'lucide-react';
 import PlayfairCipher from '../lib/playfair';
 import RSACipher from '../lib/rsa';
 import { useTheme } from '../context/ThemeContext';
 
 const EncryptionApp = () => {
-    const [method, setMethod] = useState('playfair');
-    const [inputText, setInputText] = useState('');
-    const [outputText, setOutputText] = useState('');
-    const [playfairKey, setPlayfairKey] = useState('');
-    const [rsaP, setRsaP] = useState('17');
-    const [rsaQ, setRsaQ] = useState('11');
-    const [mode, setMode] = useState('encrypt');
-    const [playfairMatrix, setPlayfairMatrix] = useState([]);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [showKey, setShowKey] = useState(false);
-    const [copied, setCopied] = useState(false);
-    const [isMaximized, setIsMaximized] = useState(false);
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [aboutOpen, setAboutOpen] = useState(false);
-    const { theme, toggleTheme, themeClasses } = useTheme();
+  const [method, setMethod] = useState('playfair');
+  const [inputText, setInputText] = useState('');
+  const [outputText, setOutputText] = useState('');
+  const [playfairKey, setPlayfairKey] = useState('');
+  const [rsaP, setRsaP] = useState('17');
+  const [rsaQ, setRsaQ] = useState('11');
+  const [mode, setMode] = useState('encrypt');
+  const [playfairMatrix, setPlayfairMatrix] = useState<string[][]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const { theme, toggleTheme, themeClasses } = useTheme();
 
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyboard = (e: any) => {
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key) {
-                    case 'Enter':
-                        e.preventDefault(); // ensure not conflicting with browser behaviors
-                        handleEncryptDecrypt();
-                        break;
-                    case 'c':
-                        if (e.shiftKey) {
-                            e.preventDefault();
-                            copyToClipboard();
-                        }
-                        break;
-                    case 'r':
-                        e.preventDefault();
-                        clearAll();
-                        break;
-                    case 't':
-                        e.preventDefault();
-                        toggleTheme();
-                        break;
-                    case '1':
-                        e.preventDefault();
-                        setMethod('playfair');
-                        break;
-                    case '2':
-                        e.preventDefault();
-                        setMethod('rsa');
-                        break;
-                }
+  useEffect(() => {
+    const handleKeyboard = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'Enter':
+            e.preventDefault();
+            handleEncryptDecrypt();
+            break;
+          case 'c':
+            if (e.shiftKey) {
+              e.preventDefault();
+              copyToClipboard();
             }
-        };
-
-        document.addEventListener('keydown', handleKeyboard);
-        return () => document.removeEventListener('keydown', handleKeyboard);
-    }, [inputText, outputText, toggleTheme]);
-
-    const handleEncryptDecrypt = async () => {
-        setIsProcessing(true);
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        if (method === 'playfair') {
-            const cipher = new PlayfairCipher(playfairKey);
-            setPlayfairMatrix(cipher.getMatrix());
-
-            if (mode === 'encrypt') {
-                setOutputText(cipher.encrypt(inputText));
-            } else {
-                setOutputText(cipher.decrypt(inputText));
-            }
-        } else {
-            try {
-                const p = parseInt(rsaP);
-                const q = parseInt(rsaQ);
-                const cipher = new RSACipher(p, q);
-
-                if (mode === 'encrypt') {
-                    const encrypted = cipher.encrypt(inputText);
-                    setOutputText(JSON.stringify(encrypted));
-                } else {
-                    try {
-                        const decrypted = cipher.decrypt(JSON.parse(inputText));
-                        setOutputText(decrypted);
-                    } catch (error) {
-                        alert('Invalid encrypted text format. Please provide a valid array of numbers.');
-                    }
-                }
-            } catch (error) {
-                alert('Please provide valid prime numbers for P and Q');
-            }
+            break;
+          case 'r':
+            e.preventDefault();
+            clearAll();
+            break;
+          case 't':
+            e.preventDefault();
+            toggleTheme();
+            break;
+          case '1':
+            e.preventDefault();
+            setMethod('playfair');
+            break;
+          case '2':
+            e.preventDefault();
+            setMethod('rsa');
+            break;
         }
-
-        setIsProcessing(false);
+      }
     };
+    document.addEventListener('keydown', handleKeyboard);
+    return () => document.removeEventListener('keydown', handleKeyboard);
+  }, [inputText, outputText, toggleTheme]);
 
-    const copyToClipboard = () => {
-        if (outputText) {
-            navigator.clipboard.writeText(outputText);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        }
-    };
-
-    const clearAll = () => {
-        setInputText('');
-        setOutputText('');
+  useEffect(() => {
+    if (method === 'playfair' && playfairKey.trim()) {
+      try {
+        const cipher = new PlayfairCipher(playfairKey);
+        setPlayfairMatrix(cipher.getMatrix());
+      } catch (err) {
+        console.error('Invalid Playfair Key:', err);
         setPlayfairMatrix([]);
-    };
+      }
+    } else {
+      setPlayfairMatrix([]);
+    }
+  }, [playfairKey, method]);
 
-    const swapInputOutput = () => {
-        const temp = inputText;
-        setInputText(outputText);
-        setOutputText(temp);
-        setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
-    };
-
-    const loadFromFile = useCallback(() => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json,.txt';
-      input.onchange = (e: Event) => {
-        // Type assertion for input element
-        const target = e.target as HTMLInputElement;
-        const file = target.files?.[0];
-
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (e: ProgressEvent<FileReader>) => {
-            try {
-              // Use the properly typed FileReader result
-              const result = e.target?.result as string;
-              const data = JSON.parse(result);
-              if (data.method) setMethod(data.method);
-              if (data.mode) setMode(data.mode);
-              if (data.input) setInputText(data.input);
-              if (data.output) setOutputText(data.output);
-              if (data.key) setPlayfairKey(data.key);
-              if (data.p) setRsaP(data.p.toString());
-              if (data.q) setRsaQ(data.q.toString());
-            } catch (error) {
-              // If JSON parsing fails, treat as plain text
-              setInputText(e.target?.result as string);
-            }
-          };
-          reader.readAsText(file);
+  const handleEncryptDecrypt = async () => {
+    setIsProcessing(true);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      if (method === 'playfair') {
+        const cipher = new PlayfairCipher(playfairKey);
+        setOutputText(mode === 'encrypt' ? cipher.encrypt(inputText) : cipher.decrypt(inputText));
+      } else {
+        const p = parseInt(rsaP);
+        const q = parseInt(rsaQ);
+        const cipher = new RSACipher(p, q);
+        if (mode === 'encrypt') {
+          const encrypted = cipher.encrypt(inputText);
+          setOutputText(JSON.stringify(encrypted));
+        } else {
+          const decrypted = cipher.decrypt(JSON.parse(inputText));
+          setOutputText(decrypted);
         }
-      };
-      input.click();
-    }, []);
+      }
+    } catch (error: any) {
+      alert(error.message || 'Encryption/Decryption failed.');
+    }
+    setIsProcessing(false);
+  };
+
+  const copyToClipboard = () => {
+    if (outputText) {
+      navigator.clipboard.writeText(outputText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const clearAll = () => {
+    setInputText('');
+    setOutputText('');
+    setPlayfairMatrix([]);
+  };
+
+  const swapInputOutput = () => {
+    setInputText(outputText);
+    setOutputText(inputText);
+    setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
+  };
+
+  const loadFromFile = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.txt';
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e: ProgressEvent<FileReader>) => {
+          try {
+            const result = e.target?.result as string;
+            const data = JSON.parse(result);
+            if (data.method) setMethod(data.method);
+            if (data.mode) setMode(data.mode);
+            if (data.input) setInputText(data.input);
+            if (data.output) setOutputText(data.output);
+            if (data.key) setPlayfairKey(data.key);
+            if (data.p) setRsaP(data.p.toString());
+            if (data.q) setRsaQ(data.q.toString());
+          } catch {
+            setInputText(e.target?.result as string);
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  }, []);
 
     return (
       <div className={`h-screen ${themeClasses[theme].background} ${themeClasses[theme].text} flex flex-col overflow-hidden`}>
@@ -417,7 +413,7 @@ const EncryptionApp = () => {
                         </div>
                     </div>
 
-\                    {/* Action Bar */}
+                    {/* Action Bar */}
                     <div className={`h-16 ${themeClasses[theme].surface} border-t ${themeClasses[theme].border} flex items-center justify-center px-4`}>
                         <button
                             onClick={handleEncryptDecrypt}

@@ -1,8 +1,8 @@
 {
-  "name": "app",
-  "productName": "app",
+  "name": "cryptify",
+  "productName": "Cryptify",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Desktop encryption toolkit supporting Playfair and RSA algorithms",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -14,7 +14,8 @@
     "make:win": "electron-forge make --platform win32",
     "make:linux": "electron-forge make --platform linux",
     "make:all": "electron-forge make --platform darwin,win32,linux",
-    "setup": "ts-node setup.ts"
+    "setup": "ts-node setup.ts",
+    "test": "jest"
   },
   "keywords": [],
   "author": "artemsemenchenko",
@@ -30,7 +31,11 @@
     "@electron-forge/plugin-vite": "^7.8.0",
     "@electron/fuses": "^1.8.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/electron-squirrel-startup": "^1.0.2",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.15.21",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
@@ -41,9 +46,13 @@
     "electron": "35.1.2",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.31.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^30.0.0-beta.3",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
     "typescript": "~4.5.4",
     "vite": "^6.3.5"
