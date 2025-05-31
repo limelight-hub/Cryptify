@@ -7,12 +7,13 @@ import React, {
 import EncryptionApp from './components/EncryptionApp';
 import { createRoot } from 'react-dom/client';
 import './index.css';
+import { ThemeProvider } from './context/ThemeContext';
 
 function App() {
     return (
-        <div>
+        <ThemeProvider>
             <EncryptionApp />
-        </div>
+        </ThemeProvider>
     );
 }
 
