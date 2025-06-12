@@ -123,10 +123,66 @@ Coming soon! We're working on capturing the best shots of Cryptify in action.
 - Educational tool for cryptography learners
 
 ---
+## 📄 Test Cases – Playfair Cipher
+
+🔹 Test Case 1 – Có ký tự trùng 
+
+- Plaintext: BALL
+
+- Key: KEYWORD
+
+- Encrypted: CBIZ
+
+- Decrypted: BALX
+(Cặp 'LL' → 'LX' theo quy tắc Playfair)
+
+🔹 Test Case 2 – Câu ngắn có khoảng trắng
+
+- Plaintext: MEET ME
+
+- Key: ENCRYPTION
+
+- Encrypted: KCNPKC
+
+- Decrypted: MEETME
+
+---
+## 📄 Test Cases – Playfair Cipher
+
+🔹Test Case 1 – Mã hóa và giải mã cơ bản
+
+- Plaintext: HELLO
+
+- Key (P, Q): 17, 11
+
+- Encrypted: [183,137,87,87,107]
+
+- Decrypted: HELLO
+
+🔹Test Case 2 – Chuỗi có khoảng trắng
+
+- Plaintext: HI THERE
+
+- Key (P, Q): 17, 11
+
+- Encrypted: [43,183,57,43,101,183,137,92,137]
+
+- Decrypted: HI THERE
+
+🔹Test Case 3 – Ký tự đặc biệt
+
+- Plaintext: A&B!
+
+- Key (P, Q): 17, 11
+
+- Encrypted: [109,81,77,33]
+
+- Decrypted: A&B!
+
+---
 ## 📄 License
 MIT License © 2025 – Networking Security Project
 
----
 
 ## 🤝 Contributors
 
