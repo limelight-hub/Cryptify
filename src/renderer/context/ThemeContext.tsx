@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useMemo } from 'react';
 
 // Theme class definitions
 export const themeClasses = {
@@ -30,7 +30,7 @@ export const themeClasses = {
         accentBg: 'bg-blue-500',
         accentHover: 'hover:bg-blue-600',
     }
-};
+} as const;
 
 // Define context type
 interface ThemeContextType {
@@ -44,14 +44,39 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 // Provider component
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    // Initialize theme from localStorage or default to 'dark'
+    const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+        try {
+            const savedTheme = localStorage.getItem('cryptify-theme');
+            return (savedTheme === 'light' || savedTheme === 'dark') ? savedTheme : 'dark';
+        } catch (error) {
+            console.warn('Failed to read theme from localStorage:', error);
+            return 'dark';
+        }
+    });
+
+    // Save theme to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem('cryptify-theme', theme);
+        } catch (error) {
+            console.warn('Failed to save theme to localStorage:', error);
+        }
+    }, [theme]);
 
     const toggleTheme = () => {
         setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
     };
 
+    // Memoize the context value to prevent unnecessary re-renders
+    const contextValue = useMemo(() => ({
+        theme,
+        toggleTheme,
+        themeClasses,
+    }), [theme]);
+
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme, themeClasses }}>
+        <ThemeContext.Provider value={contextValue}>
             {children}
         </ThemeContext.Provider>
     );

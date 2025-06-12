@@ -1,66 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Menu, Lock, Unlock, Key, Shield, Eye, EyeOff, FileText, Copy, Check,
-  RotateCcw, FolderOpen, Maximize2, Minimize2, X, Info, Sun, Moon
+  Menu, Shield, RotateCcw, FolderOpen, Maximize2, Minimize2, X, Info, Sun, Moon
 } from 'lucide-react';
+
 import PlayfairCipher from '../lib/playfair';
 import RSACipher from '../lib/rsa';
 import { useTheme } from '../context/ThemeContext';
+import { useClipboard } from '../hooks/useClipboard';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useNotification } from '../hooks/useNotification';
+
+import Sidebar from './Sidebar';
+import TextPanel from './TextPanel';
+import ProcessButton from './ProcessButton';
+import NotificationContainer from './NotificationContainer';
+import AboutCard from './AboutCard';
 
 const EncryptionApp = () => {
-  const [method, setMethod] = useState('playfair');
+  // Core state
+  const [method, setMethod] = useState<'playfair' | 'rsa'>('playfair');
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
+  const [mode, setMode] = useState<'encrypt' | 'decrypt'>('encrypt');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Playfair state
   const [playfairKey, setPlayfairKey] = useState('');
+  const [playfairMatrix, setPlayfairMatrix] = useState<string[][]>([]);
+
+  // RSA state
   const [rsaP, setRsaP] = useState('17');
   const [rsaQ, setRsaQ] = useState('11');
-  const [mode, setMode] = useState('encrypt');
-  const [playfairMatrix, setPlayfairMatrix] = useState<string[][]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+
+  // UI state
   const [showKey, setShowKey] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aboutOpen, setAboutOpen] = useState(false);
+
+  // Custom hooks
   const { theme, toggleTheme, themeClasses } = useTheme();
+  const { copied, copyToClipboard } = useClipboard();
+  const { notifications, addNotification, removeNotification } = useNotification();
 
-  useEffect(() => {
-    const handleKeyboard = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case 'Enter':
-            e.preventDefault();
-            handleEncryptDecrypt();
-            break;
-          case 'c':
-            if (e.shiftKey) {
-              e.preventDefault();
-              copyToClipboard();
-            }
-            break;
-          case 'r':
-            e.preventDefault();
-            clearAll();
-            break;
-          case 't':
-            e.preventDefault();
-            toggleTheme();
-            break;
-          case '1':
-            e.preventDefault();
-            setMethod('playfair');
-            break;
-          case '2':
-            e.preventDefault();
-            setMethod('rsa');
-            break;
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKeyboard);
-    return () => document.removeEventListener('keydown', handleKeyboard);
-  }, [inputText, outputText, toggleTheme]);
+  // Memoized validation
+  const isValidInput = useMemo(() => {
+    if (!inputText.trim()) return false;
+    if (method === 'playfair' && !playfairKey.trim()) return false;
+    return true;
+  }, [inputText, method, playfairKey]);
 
+  // Update Playfair matrix when key changes
   useEffect(() => {
     if (method === 'playfair' && playfairKey.trim()) {
       try {
@@ -75,50 +65,97 @@ const EncryptionApp = () => {
     }
   }, [playfairKey, method]);
 
-  const handleEncryptDecrypt = async () => {
+  // Encryption/Decryption handler
+  const handleEncryptDecrypt = useCallback(async () => {
+    if (!isValidInput) return;
+
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Add some visual feedback delay
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     try {
+      let result: string;
+
       if (method === 'playfair') {
         const cipher = new PlayfairCipher(playfairKey);
-        setOutputText(mode === 'encrypt' ? cipher.encrypt(inputText) : cipher.decrypt(inputText));
+        result = mode === 'encrypt'
+          ? cipher.encrypt(inputText)
+          : cipher.decrypt(inputText);
       } else {
         const p = parseInt(rsaP);
         const q = parseInt(rsaQ);
         const cipher = new RSACipher(p, q);
+
         if (mode === 'encrypt') {
           const encrypted = cipher.encrypt(inputText);
-          setOutputText(JSON.stringify(encrypted));
+          result = JSON.stringify(encrypted);
         } else {
-          const decrypted = cipher.decrypt(JSON.parse(inputText));
-          setOutputText(decrypted);
+          try {
+            const parsedInput = JSON.parse(inputText);
+            result = cipher.decrypt(parsedInput);
+          } catch {
+            throw new Error('Invalid JSON format for RSA decryption');
+          }
         }
       }
+
+      setOutputText(result);
+      addNotification({
+        type: 'success',
+        title: `${mode === 'encrypt' ? 'Encryption' : 'Decryption'} successful!`,
+        message: `Processed ${inputText.length} characters using ${method.toUpperCase()}`,
+      });
     } catch (error: any) {
-      alert(error.message || 'Encryption/Decryption failed.');
+      const errorMessage = error.message || 'Operation failed';
+      addNotification({
+        type: 'error',
+        title: `${mode === 'encrypt' ? 'Encryption' : 'Decryption'} failed`,
+        message: errorMessage,
+      });
+      setOutputText('');
+    } finally {
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
-  };
+  }, [method, mode, inputText, playfairKey, rsaP, rsaQ, isValidInput, addNotification]);
 
-  const copyToClipboard = () => {
+  // Other handlers
+  const handleCopyToClipboard = useCallback(async () => {
     if (outputText) {
-      navigator.clipboard.writeText(outputText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const success = await copyToClipboard(outputText);
+      if (success) {
+        addNotification({
+          type: 'success',
+          title: 'Copied to clipboard!',
+          duration: 2000,
+        });
+      }
     }
-  };
+  }, [outputText, copyToClipboard, addNotification]);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setInputText('');
     setOutputText('');
     setPlayfairMatrix([]);
-  };
+    addNotification({
+      type: 'info',
+      title: 'Cleared all text',
+      duration: 2000,
+    });
+  }, [addNotification]);
 
-  const swapInputOutput = () => {
-    setInputText(outputText);
-    setOutputText(inputText);
-    setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
-  };
+  const swapInputOutput = useCallback(() => {
+    if (outputText) {
+      setInputText(outputText);
+      setOutputText(inputText);
+      setMode(mode === 'encrypt' ? 'decrypt' : 'encrypt');
+      addNotification({
+        type: 'info',
+        title: 'Swapped input and output',
+        duration: 2000,
+      });
+    }
+  }, [inputText, outputText, mode, addNotification]);
 
   const loadFromFile = useCallback(() => {
     const input = document.createElement('input');
@@ -140,370 +177,196 @@ const EncryptionApp = () => {
             if (data.key) setPlayfairKey(data.key);
             if (data.p) setRsaP(data.p.toString());
             if (data.q) setRsaQ(data.q.toString());
+
+            addNotification({
+              type: 'success',
+              title: 'File loaded successfully',
+            });
           } catch {
             setInputText(e.target?.result as string);
+            addNotification({
+              type: 'info',
+              title: 'Text file loaded',
+            });
           }
         };
         reader.readAsText(file);
       }
     };
     input.click();
-  }, []);
+  }, [addNotification]);
 
-    return (
-      <div className={`h-screen ${themeClasses[theme].background} ${themeClasses[theme].text} flex flex-col overflow-hidden`}>
-        {/* Title Bar */}
-            <div className={`h-8 ${themeClasses[theme].surface} flex items-center justify-between px-4 border-b ${themeClasses[theme].border} select-none`}>
-                <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm font-medium">Cryptify Desktop</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <button className={`w-6 h-6 rounded ${themeClasses[theme].surfaceHover} flex items-center justify-center`}>
-                        <Minimize2 className="w-3 h-3" />
-                    </button>
-                    <button
-                        onClick={() => setIsMaximized(!isMaximized)}
-                        className={`w-6 h-6 rounded ${themeClasses[theme].surfaceHover} flex items-center justify-center`}
-                    >
-                        <Maximize2 className="w-3 h-3" />
-                    </button>
-                    <button className="w-6 h-6 rounded hover:bg-red-600 flex items-center justify-center">
-                        <X className="w-3 h-3" />
-                    </button>
-                </div>
-            </div>
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    'Ctrl+Enter': handleEncryptDecrypt,
+    'Ctrl+Shift+C': handleCopyToClipboard,
+    'Ctrl+R': clearAll,
+    'Ctrl+T': toggleTheme,
+    'Ctrl+1': () => setMethod('playfair'),
+    'Ctrl+2': () => setMethod('rsa'),
+  });
 
-
-            {/* Menu Bar */}
-            <div className={`h-10 ${themeClasses[theme].surface} flex items-center justify-between px-4 border-b ${themeClasses[theme].border} text-sm`}>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className={`p-2 rounded ${themeClasses[theme].surfaceHover}`}
-                    title="Toggle Sidebar"
-                  >
-                 <Menu className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => loadFromFile()}
-                    className={`px-3 py-1 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
-                  >
-                    <FolderOpen className="w-4 h-4" />
-                    File
-                  </button>
-                  <button
-                    onClick={() => setAboutOpen(true)}
-                    className={`px-3 py-1 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
-                  >
-                    <Info className="w-4 h-4" />
-                    About
-                  </button>
-                </div>
-                <div className={themeClasses[theme].textMuted + " text-xs"}>
-                  Ctrl+Enter: Process | Ctrl+Shift+C: Copy | Ctrl+R: Clear | Ctrl+T: Toggle Theme
-                </div>
-              </div>
-              <button
-                    onClick={toggleTheme}
-                    className={`p-2 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
-                    title="Toggle Theme (Ctrl+T)"
-                  >
-                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  </button>
-            </div>
-            <div className="flex flex-1 overflow-hidden">
-                {/* Sidebar */}
-                <div className={`${sidebarOpen ? 'w-80' : 'w-0'} ${themeClasses[theme].surface} border-r ${themeClasses[theme].border} transition-all duration-300 overflow-hidden flex flex-col`}>
-                    <div className={`p-4 border-b ${themeClasses[theme].border}`}>
-                        <h3 className="font-semibold mb-4 flex items-center gap-2">
-                            <Key className="w-4 h-4" />
-                            Configuration
-                        </h3>
-
-                        {/* Method Selection */}
-                        <div className="space-y-3 mb-6">
-                            <label className={`text-sm ${themeClasses[theme].textSecondary}`}>Encryption Method</label>
-                            <div className="grid grid-cols-1 gap-2">
-                                <button
-                                    onClick={() => setMethod('playfair')}
-                                    className={`p-3 rounded-lg text-left transition-all duration-200 border ${method === 'playfair'
-                                        ? 'bg-blue-600 border-blue-500 text-white'
-                                        : `${themeClasses[theme].input} ${themeClasses[theme].textSecondary} ${themeClasses[theme].surfaceHover}`
-                                    }`}
-                                >
-                                    <div className="font-medium">Playfair Cipher</div>
-                                    <div className="text-xs opacity-75">Classical polyalphabetic</div>
-                                </button>
-                                <button
-                                    onClick={() => setMethod('rsa')}
-                                    className={`p-3 rounded-lg text-left transition-all duration-200 border ${method === 'rsa'
-                                        ? 'bg-blue-600 border-blue-500 text-white'
-                                        : `${themeClasses[theme].input} ${themeClasses[theme].textSecondary} ${themeClasses[theme].surfaceHover}`
-                                    }`}
-                                >
-                                    <div className="font-medium">RSA Encryption</div>
-                                    <div className="text-xs opacity-75">Public-key cryptography</div>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Operation Mode */}
-                        <div className="space-y-3 mb-6">
-                            <label className={`text-sm ${themeClasses[theme].textSecondary}`}>Operation Mode</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    onClick={() => setMode('encrypt')}
-                                    className={`p-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'encrypt'
-                                        ? 'bg-green-600 text-white'
-                                        : `${themeClasses[theme].input} ${themeClasses[theme].textSecondary} ${themeClasses[theme].surfaceHover}`
-                                    }`}
-                                >
-                                    <Lock className="w-4 h-4" />
-                                    Encrypt
-                                </button>
-                                <button
-                                    onClick={() => setMode('decrypt')}
-                                    className={`p-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${mode === 'decrypt'
-                                        ? 'bg-orange-600 text-white'
-                                        : `${themeClasses[theme].input} ${themeClasses[theme].textSecondary} ${themeClasses[theme].surfaceHover}`
-                                    }`}
-                                >
-                                    <Unlock className="w-4 h-4" />
-                                    Decrypt
-                                </button>
-                            </div>
-                        </div>
-
-
-                        {/* Key Configuration */}
-                        {method === 'playfair' ? (
-                            <div className="space-y-3">
-                                <label className={`text-sm ${themeClasses[theme].textSecondary}`}>Playfair Key</label>
-                                <div className="relative">
-                                    <input
-                                        type={showKey ? "text" : "password"}
-                                        value={playfairKey}
-                                        onChange={(e) => setPlayfairKey(e.target.value)}
-                                        placeholder="Enter secret key..."
-                                        className={`w-full px-3 py-2 ${themeClasses[theme].input} rounded-lg ${themeClasses[theme].text} placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10`}
-                                    />
-                                    <button
-                                        onClick={() => setShowKey(!showKey)}
-                                        className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${themeClasses[theme].textMuted} hover:${themeClasses[theme].text}`}
-                                    >
-                                        {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                          <div className="space-y-4">
-                          <div className="space-y-2">
-                              <label className={`text-sm ${themeClasses[theme].textSecondary}`}>RSA Prime P</label>
-                              <input
-                                  type="number"
-                                  value={rsaP}
-                                  onChange={(e) => setRsaP(e.target.value)}
-                                  className={`w-full px-3 py-2 ${themeClasses[theme].input} rounded-lg ${themeClasses[theme].text} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                              />
-                          </div>
-                          <div className="space-y-2">
-                              <label className={`text-sm ${themeClasses[theme].textSecondary}`}>RSA Prime Q</label>
-                              <input
-                                  type="number"
-                                  value={rsaQ}
-                                  onChange={(e) => setRsaQ(e.target.value)}
-                                  className={`w-full px-3 py-2 ${themeClasses[theme].input} rounded-lg ${themeClasses[theme].text} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                              />
-                          </div>
-                      </div>
-                        )}
-                    </div>
-
-                    {/* Playfair Matrix */}
-                    {method === "playfair" && playfairMatrix.length > 0 && (
-                        <div className="p-4 flex-1 overflow-auto">
-                            <h4 className={`text-sm font-medium ${themeClasses[theme].textSecondary} mb-3`}>Playfair Matrix</h4>
-                            <div className="grid grid-cols-5 gap-1">
-                                {playfairMatrix.map((row, i) =>
-                                    row.map((cell, j) => (
-                                        <div
-                                            key={`${i}-${j}`}
-                                            className={`w-10 h-10 ${themeClasses[theme].input} rounded flex items-center justify-center text-sm font-mono text-blue-500`}
-                                        >
-                                            {cell}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Main Content */}
-                <div className="flex-1 flex flex-col">
-                    {/* Toolbar */}
-                    <div className={`h-12 ${themeClasses[theme].surface} border-b ${themeClasses[theme].border} flex items-center justify-between px-4`}>
-                        <div></div>
-
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={swapInputOutput}
-                                className={`p-2 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-1 text-sm`}
-                                title="Swap Input/Output"
-                            >
-                                <RotateCcw className="w-4 h-4" />
-                                Swap
-                            </button>
-                            <button
-                                onClick={clearAll}
-                                className={`p-2 rounded ${themeClasses[theme].surfaceHover} text-sm`}
-                                title="Clear All (Ctrl+R)"
-                            >
-                                Clear
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Content Areas */}
-                    <div className={`flex-1 grid grid-cols-2 gap-4 p-4 ${themeClasses[theme].background}`}>
-                        {/* Input Panel */}
-                        <div className={`flex flex-col ${themeClasses[theme].cardBg} rounded-lg border ${themeClasses[theme].border}`}>
-                            <div className={`p-3 border-b ${themeClasses[theme].border} flex items-center gap-2`}>
-                                <FileText className="w-4 h-4 text-blue-400" />
-                                <span className="font-medium">Input Text</span>
-                                <div className={`ml-auto text-xs ${themeClasses[theme].textMuted}`}>
-                                    {inputText.length} characters
-                                </div>
-                            </div>
-                            <textarea
-                                value={inputText}
-                                onChange={(e) => setInputText(e.target.value)}
-                                placeholder={mode === "encrypt" ? "Enter text to encrypt..." : "Enter text to decrypt..."}
-                                className={`flex-1 p-4 bg-transparent ${themeClasses[theme].text} placeholder-gray-400 resize-none focus:outline-none font-mono`}
-                                style={{ minHeight: '300px' }}
-                            />
-                        </div>
-
-                     {/* Output Panel */}
-                     <div className={`flex flex-col ${themeClasses[theme].cardBg} rounded-lg border ${themeClasses[theme].border}`}>
-                            <div className={`p-3 border-b ${themeClasses[theme].border} flex items-center gap-2`}>
-                                <Lock className="w-4 h-4 text-green-400" />
-                                <span className="font-medium">Output Result</span>
-                                <div className="ml-auto flex items-center gap-2">
-                                    <span className={`text-xs ${themeClasses[theme].textMuted}`}>
-                                        {outputText.length} characters
-                                    </span>
-                                    <button
-                                        onClick={copyToClipboard}
-                                        className={`p-1 rounded ${themeClasses[theme].surfaceHover} ${themeClasses[theme].textMuted}`}
-                                        title="Copy to Clipboard (Ctrl+Shift+C)"
-                                    >
-                                        {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                            </div>
-                            <textarea
-                                value={outputText}
-                                readOnly
-                                className="flex-1 p-4 bg-transparent text-green-500 resize-none focus:outline-none font-mono"
-                                style={{ minHeight: '300px' }}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Action Bar */}
-                    <div className={`h-16 ${themeClasses[theme].surface} border-t ${themeClasses[theme].border} flex items-center justify-center px-4`}>
-                        <button
-                            onClick={handleEncryptDecrypt}
-                            disabled={isProcessing || !inputText.trim() || (method === 'playfair' && !playfairKey.trim())}
-                            className={`px-8 py-3 ${!isProcessing && !(!inputText.trim() || (method === 'playfair' && !playfairKey.trim()))
-                                ? 'bg-blue-600 hover:bg-blue-700'
-                                : 'bg-gray-600'}
-                                text-white font-medium rounded-lg transition-all duration-200 flex items-center gap-3 disabled:cursor-not-allowed min-w-48 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50`}
-                            aria-busy={isProcessing}
-                        >
-                            {isProcessing ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-                                        role="status" aria-label="Loading" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    {mode === 'encrypt' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                                    {mode === 'encrypt' ? 'Encrypt Text' : 'Decrypt Text'}
-                                    <span className="text-xs opacity-75 ml-1">(Ctrl+Enter)</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {aboutOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className={`${themeClasses[theme].surface} rounded-lg shadow-lg w-full max-w-md mx-4`}>
-                        <div className={`p-4 border-b ${themeClasses[theme].border} flex justify-between items-center`}>
-                            <h3 className="text-lg font-semibold flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-blue-400" />
-                                About Cryptify
-                            </h3>
-                            <button
-                                onClick={() => setAboutOpen(false)}
-                                className={`p-1 rounded-md ${themeClasses[theme].surfaceHover}`}
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6">
-                            <div className="flex justify-center mb-4">
-                                <div className="h-20 w-20 rounded-full flex items-center justify-center">
-                                    <Shield className="w-12 h-12 text-blue-400" />
-                                    </div>
-                            </div>
-
-                            <h4 className="text-center text-xl font-bold mb-2">Cryptify</h4>
-                            <p className="text-center text-gray-400 mb-4">v1.0.0</p>
-
-                            <div className="rounded-md p-4 mb-4">
-                                <p className="text-sm text-gray-300 leading-relaxed">
-                                    Cryptify is a desktop application that allows you to encrypt and decrypt
-                                    messages using various cryptographic algorithms including Playfair cipher
-                                    and RSA encryption.
-                                </p>
-                            </div>
-
-                            <div className="space-y-3 text-sm text-gray-400">
-                                <div className="flex justify-between">
-                                    <span>Developer</span>
-                                    <span className="text-gray-300">Truc Lam, Vu Binh, Chanh Phuc @ UIT</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Framework</span>
-                                    <span className="text-gray-300">Electron + React</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>License</span>
-                                    <span className="text-gray-300">MIT</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-700 flex justify-end">
-                            <button
-                                onClick={() => setAboutOpen(false)}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                )}
-            </div>
+  return (
+    <div className={`h-screen ${themeClasses[theme].background} ${themeClasses[theme].text} flex flex-col overflow-hidden`}>
+      {/* Title Bar */}
+      <div className={`h-8 ${themeClasses[theme].surface} flex items-center justify-between px-4 border-b ${themeClasses[theme].border} select-none`}>
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-blue-400" />
+          <span className="text-sm font-medium">Cryptify Desktop</span>
         </div>
-    );
+        <div className="flex items-center gap-1">
+          <button className={`w-6 h-6 rounded ${themeClasses[theme].surfaceHover} flex items-center justify-center`}>
+            <Minimize2 className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => setIsMaximized(!isMaximized)}
+            className={`w-6 h-6 rounded ${themeClasses[theme].surfaceHover} flex items-center justify-center`}
+          >
+            <Maximize2 className="w-3 h-3" />
+          </button>
+          <button className="w-6 h-6 rounded hover:bg-red-600 flex items-center justify-center">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* Menu Bar */}
+      <div className={`h-10 ${themeClasses[theme].surface} flex items-center justify-between px-4 border-b ${themeClasses[theme].border} text-sm`}>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`p-2 rounded ${themeClasses[theme].surfaceHover}`}
+              title="Toggle Sidebar"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <button
+              onClick={loadFromFile}
+              className={`px-3 py-1 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              File
+            </button>
+            <button
+              onClick={() => setAboutOpen(true)}
+              className={`px-3 py-1 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
+            >
+              <Info className="w-4 h-4" />
+              About
+            </button>
+          </div>
+          <div className={themeClasses[theme].textMuted + " text-xs"}>
+            Ctrl+Enter: Process | Ctrl+Shift+C: Copy | Ctrl+R: Clear | Ctrl+T: Toggle Theme
+          </div>
+        </div>
+        <button
+          onClick={toggleTheme}
+          className={`p-2 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-2`}
+          title="Toggle Theme (Ctrl+T)"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <Sidebar
+          isOpen={sidebarOpen}
+          method={method}
+          mode={mode}
+          playfairKey={playfairKey}
+          rsaP={rsaP}
+          rsaQ={rsaQ}
+          showKey={showKey}
+          playfairMatrix={playfairMatrix}
+          onMethodChange={setMethod}
+          onModeChange={setMode}
+          onPlayfairKeyChange={setPlayfairKey}
+          onRsaPChange={setRsaP}
+          onRsaQChange={setRsaQ}
+          onToggleShowKey={() => setShowKey(!showKey)}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          {/* Toolbar */}
+          <div className={`h-12 ${themeClasses[theme].surface} border-b ${themeClasses[theme].border} flex items-center justify-between px-4`}>
+            <div></div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={swapInputOutput}
+                disabled={!outputText}
+                className={`p-2 rounded ${themeClasses[theme].surfaceHover} flex items-center gap-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="Swap Input/Output"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Swap
+              </button>
+              <button
+                onClick={clearAll}
+                className={`p-2 rounded ${themeClasses[theme].surfaceHover} text-sm`}
+                title="Clear All (Ctrl+R)"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Content Areas */}
+          <div className={`flex-1 grid grid-cols-2 gap-4 p-4 ${themeClasses[theme].background}`}>
+            <TextPanel
+              type="input"
+              value={inputText}
+              onChange={setInputText}
+              mode={mode}
+            />
+            <TextPanel
+              type="output"
+              value={outputText}
+              readOnly
+              copied={copied}
+              onCopy={handleCopyToClipboard}
+              mode={mode}
+            />
+          </div>
+
+          {/* Action Bar */}
+          <div className={`h-16 ${themeClasses[theme].surface} border-t ${themeClasses[theme].border} flex items-center justify-center px-4`}>
+            <ProcessButton
+              mode={mode}
+              isProcessing={isProcessing}
+              disabled={!isValidInput}
+              onClick={handleEncryptDecrypt}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* About Dialog */}
+      {aboutOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="max-w-md w-full">
+            <AboutCard />
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={() => setAboutOpen(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notifications */}
+      <NotificationContainer
+        notifications={notifications}
+        onRemove={removeNotification}
+      />
+    </div>
+  );
 };
 
 export default EncryptionApp;

@@ -1,19 +1,16 @@
-import React, {
-    useState,
-    useOptimistic,
-    useActionState,
-    startTransition,
-} from 'react';
+import React from 'react';
 import EncryptionApp from './components/EncryptionApp';
-import { createRoot } from 'react-dom/client';
-import './index.css';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './context/ThemeContext';
+import './index.css';
 
 function App() {
     return (
-        <ThemeProvider>
-            <EncryptionApp />
-        </ThemeProvider>
+        <ErrorBoundary>
+            <ThemeProvider>
+                <EncryptionApp />
+            </ThemeProvider>
+        </ErrorBoundary>
     );
 }
 

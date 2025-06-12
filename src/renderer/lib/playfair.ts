@@ -3,12 +3,24 @@ export default class PlayfairCipher {
   private key: string = '';
 
   constructor(key: string) {
+    if (!key || typeof key !== 'string') {
+      throw new Error('Playfair key must be a non-empty string');
+    }
+
     this.key = this.prepareKey(key);
+    if (this.key.length < 1) {
+      throw new Error('Playfair key must contain at least one letter');
+    }
+
     this.matrix = this.generateMatrix();
   }
 
   private prepareKey(key: string): string {
-    return key.toUpperCase().replace(/[^A-Z]/g, '').replace(/J/g, 'I');
+    const cleaned = key.toUpperCase().replace(/[^A-Z]/g, '').replace(/J/g, 'I');
+    if (cleaned.length === 0) {
+      throw new Error('Playfair key must contain valid letters');
+    }
+    return cleaned;
   }
 
   private generateMatrix(): string[][] {
@@ -27,11 +39,19 @@ export default class PlayfairCipher {
         if (this.matrix[row][col] === char) return { row, col };
       }
     }
-    return { row: -1, col: -1 };
+    throw new Error(`Character '${char}' not found in matrix`);
   }
 
   private processText(text: string): string[][] {
+    if (!text || typeof text !== 'string') {
+      throw new Error('Input text must be a non-empty string');
+    }
+
     const clean = this.prepareKey(text);
+    if (clean.length === 0) {
+      throw new Error('Input text must contain valid letters');
+    }
+
     const pairs: string[][] = [];
     for (let i = 0; i < clean.length; i += 2) {
       let a = clean[i];
@@ -70,14 +90,22 @@ export default class PlayfairCipher {
   }
 
   public encrypt(text: string): string {
-    return this.transform(this.processText(text), 1);
+    try {
+      return this.transform(this.processText(text), 1);
+    } catch (error) {
+      throw new Error(`Encryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   public decrypt(text: string): string {
-    return this.transform(this.processText(text), -1);
+    try {
+      return this.transform(this.processText(text), -1);
+    } catch (error) {
+      throw new Error(`Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   public getMatrix(): string[][] {
-    return this.matrix;
+    return this.matrix.map(row => [...row]); // Return a copy to prevent external modification
   }
 }

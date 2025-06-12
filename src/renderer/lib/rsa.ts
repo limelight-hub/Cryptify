@@ -7,15 +7,34 @@ export default class RSACipher {
   private d: number;
 
   constructor(p: number, q: number) {
+    // Validate inputs
+    if (!Number.isInteger(p) || !Number.isInteger(q)) {
+      throw new Error('P and Q must be integers');
+    }
+
+    if (p <= 1 || q <= 1) {
+      throw new Error('P and Q must be greater than 1');
+    }
+
     if (!this.isPrime(p) || !this.isPrime(q)) {
       throw new Error('Both P and Q must be prime numbers');
     }
+
+    if (p === q) {
+      throw new Error('P and Q must be different prime numbers');
+    }
+
     this.p = p;
     this.q = q;
     this.n = p * q;
     this.phi = (p - 1) * (q - 1);
-    this.e = this.findE(this.phi);
-    this.d = this.modInverse(this.e, this.phi);
+
+    try {
+      this.e = this.findE(this.phi);
+      this.d = this.modInverse(this.e, this.phi);
+    } catch (error) {
+      throw new Error(`RSA key generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private isPrime(n: number): boolean {
@@ -59,11 +78,42 @@ export default class RSACipher {
   }
 
   public encrypt(text: string): number[] {
-    return Array.from(text).map(c => this.modPow(c.charCodeAt(0), this.e, this.n));
+    if (!text || typeof text !== 'string') {
+      throw new Error('Input text must be a non-empty string');
+    }
+
+    try {
+      return Array.from(text).map(c => {
+        const charCode = c.charCodeAt(0);
+        if (charCode >= this.n) {
+          throw new Error(`Character '${c}' (code: ${charCode}) is too large for current key size (n=${this.n})`);
+        }
+        return this.modPow(charCode, this.e, this.n);
+      });
+    } catch (error) {
+      throw new Error(`Encryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   public decrypt(cipher: number[]): string {
-    return cipher.map(c => String.fromCharCode(this.modPow(c, this.d, this.n))).join('');
+    if (!Array.isArray(cipher)) {
+      throw new Error('Cipher must be an array of numbers');
+    }
+
+    if (cipher.length === 0) {
+      throw new Error('Cipher array cannot be empty');
+    }
+
+    try {
+      return cipher.map(c => {
+        if (!Number.isInteger(c) || c < 0) {
+          throw new Error(`Invalid cipher value: ${c}`);
+        }
+        return String.fromCharCode(this.modPow(c, this.d, this.n));
+      }).join('');
+    } catch (error) {
+      throw new Error(`Decryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   public getPublicKey() {
@@ -72,5 +122,16 @@ export default class RSACipher {
 
   public getPrivateKey() {
     return { d: this.d, n: this.n };
+  }
+
+  public getKeyInfo() {
+    return {
+      p: this.p,
+      q: this.q,
+      n: this.n,
+      phi: this.phi,
+      e: this.e,
+      d: this.d,
+    };
   }
 }
